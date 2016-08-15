@@ -26,7 +26,8 @@ namespace AddADescription
         {
             if (args.Length != 3)
             {
-                Console.WriteLine("Expected args: <asset_folder> <species_name> <output_folder>\nAsset and Output folder must exist to prevent crashes.");
+                Console.WriteLine("Expected args: <asset_folder> <species_name> <output_folder>\nAsset and Output folder must exist to prevent crashes.\nPress any key to exit...");
+                Console.ReadKey();
                 return;
             }
 
