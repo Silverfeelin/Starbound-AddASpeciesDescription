@@ -12,60 +12,113 @@ namespace AddADescription
     {
 
         delegate void FileCallback(FileInfo file);
+
         static JArray result;
+
         static string basePath;
+        static string outputPath;
         static string species;
+        static bool skipMissing;
+
+        static bool overwriteAll = false;
+
         static DirectoryInfo diOutput;
         static JArray patch;
         static int count = 0;
 
         ///string[] extensions = ".activeitem,.object,.codex,.head,.chest,.legs,.back,.augment,.coinitem,.item,.consumable,.unlock,.instrument,.liqitem,.matitem,.thrownitem,.harvestingtool,.flashlight,.grapplinghook,.painttool,.wiretool,.beamaxe,.tillingtool,.miningtool,.techitem".Split(',');
-        static string[] extensions = ".object".Split(',');
+        static string[] extensions = ".object,.material".Split(',');
+        static string patchString = "[{'op':'add','path':'/testDescription','value':''}]";
 
         static void Main(string[] args)
         {
-            if (args.Length != 3)
+            if (args.Length != 4)
             {
-                Console.WriteLine("Expected args: <asset_folder> <species_name> <output_folder>\nAsset and Output folder must exist to prevent crashes.\nPress any key to exit...");
-                Console.ReadKey();
-                return;
+                Console.WriteLine("Invalid arguments.\nExpected: AddADescription.exe <asset_folder> <species_name> <output_folder> <skip_missing(true/false)>");
+                Setup();
+            }
+            else
+            {
+                basePath = args[0];
+                outputPath = args[2];
+                species = args[1];
+                skipMissing = args[3].ToLower() == "true" ? true : false;
             }
 
-            patch = JArray.Parse("[{'op':'add','path':'/testDescription','value':''}]");
             Console.WriteLine("Busy. Depending on when the files in this folder were last indexed, this may go really fast or really slow.");
 
-            basePath = args[0];
-            string outputPath = args[2];
-            species = args[1];
+            patch = JArray.Parse(patchString);
+            patch[0]["path"] = string.Format("/{0}Description", species);
 
-            patch[0]["path"] = "/" + species + "Description";
+            FixPath(basePath);
+            FixPath(outputPath);
 
-            if (basePath.LastIndexOf("\\") == basePath.Length - 1)
-                basePath = basePath.Substring(0, basePath.Length - 1);
-
-            if (outputPath.LastIndexOf("\\") == outputPath.Length - 1)
-                outputPath = outputPath.Substring(0, outputPath.Length - 1);
             diOutput = new DirectoryInfo(outputPath);
 
-            List<string> subPaths = new List<string>() { "items", "objects" };
+            List<string> subPaths = new List<string>() { "objects", "tiles" };
             DirectoryInfo diPath = new DirectoryInfo(basePath);
             DirectoryInfo[] diSubs = diPath.GetDirectories().Where(d => subPaths.Contains(d.Name)).ToArray();
             
             FileCallback fc = new FileCallback(CreatePatch);
 
             foreach (DirectoryInfo di in diSubs)
-            {
                 ScanDirectories(di.FullName, extensions, fc);
-            }
 
             Console.WriteLine("Done creating patches!\nPress any key to exit...");
             Console.ReadKey();
         }
 
+        static void Setup()
+        {
+            // Asset path
+            Console.WriteLine("Enter unpacked asset path:");
+            while (true)
+            {
+                string path = FixPath(Console.ReadLine());
+                if (Directory.Exists(path))
+                {
+                    basePath = path;
+                    break;
+                }
+                else
+                    Console.WriteLine("The given path is invalid. Please enter a correct path to unpacked game assets.");
+            }
+
+            // Species
+            Console.WriteLine("Enter species name:");
+            species = Console.ReadLine();
+
+            // Output path
+            Console.WriteLine("Enter output path (it is recommended to use an empty directory):");
+            while (true)
+            {
+                string path = FixPath(Console.ReadLine());
+                if (Directory.Exists(path))
+                {
+                    outputPath = path;
+                    break;
+                }
+                else
+                    Console.WriteLine("The given path is invalid. Please enter a correct path to create patches in.");
+            }
+
+            // Skip files that lack a `humanDescription`.
+            Console.WriteLine("Skip objects with missing `humanDescription` value? If true, `description` will be used instead. y\\n");
+            skipMissing = Console.ReadKey().Key == ConsoleKey.Y;
+        }
+
+        static string FixPath(string path)
+        {
+            path = path.Replace("/", "\\");
+            if (path.LastIndexOf("\\") == path.Length - 1)
+                path = path.Substring(0, path.Length - 1);
+            return path;
+        }
+
         static void CreatePatch(FileInfo file)
         {
             count++;
-            if (count % 50 == 1)
+            if ((count + 1) % 50 == 1)
                 Console.WriteLine("Scanned {0} files.", count);
 
             string relativeFilePath = file.FullName.Replace(basePath, "").Replace("\\", "/");
@@ -83,19 +136,56 @@ namespace AddADescription
             }
 
             JToken tDesc = item.SelectToken("humanDescription");
+            if (tDesc == null || tDesc.Type != JTokenType.String)
+            {
+                Console.Write("File '" + file.FullName + "' does not have a `humanDescription` set.");
+
+                if (!skipMissing)
+                {
+                    Console.WriteLine(" Using `description`.");
+                    tDesc = item.SelectToken("description");
+                    if (tDesc == null || tDesc.Type != JTokenType.String)
+                    {
+                        Console.WriteLine(" No description found. Skipped.");
+                        return;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine(" Skipped.");
+                    return;
+                }
+            }
+
             if (tDesc != null && tDesc.Type == JTokenType.String)
             {
                 string desc = tDesc.Value<string>();
                 JToken obj = patch.DeepClone();
                 obj[0]["value"] = desc;
                 Directory.CreateDirectory(diOutput.FullName + relativeFolderPath);
-                File.WriteAllText(diOutput.FullName + relativeFilePath + ".patch", obj.ToString(Newtonsoft.Json.Formatting.Indented));
+
+                string filePath = diOutput.FullName + relativeFilePath + ".patch";
+                if (ConfirmOverwrite(filePath))
+                    File.WriteAllText(filePath, obj.ToString(Newtonsoft.Json.Formatting.Indented));
+            }
+        }
+
+        static bool ConfirmOverwrite(string path)
+        {
+            if (!overwriteAll && File.Exists(path))
+            {
+                Console.WriteLine("The file {0} already exists. Do you want to overwrite it? y\\n\\(a)ll", path);
+                ConsoleKey key = Console.ReadKey().Key;
+                if (key == ConsoleKey.A)
+                {
+                    overwriteAll = true;
+                    return true;
+                }
+                else
+                    return key == ConsoleKey.Y;
             }
             else
-            {
-                Console.WriteLine("Skipped '" + file.FullName + "', as it does not have a `humanDescription` set.");
-                return;
-            }
+                return true;
         }
 
         static void ScanDirectories(string basePath, string[] extensions, FileCallback callback)
