@@ -155,7 +155,7 @@ namespace AddADescription
                     tDesc = item.SelectToken("description");
                     if (tDesc == null || tDesc.Type != JTokenType.String)
                     {
-                        Console.WriteLine(" No description found. Skipped.");
+                        Console.WriteLine("No description found. Skipped.");
                         return;
                     }
                 }
