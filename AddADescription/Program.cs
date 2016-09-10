@@ -43,6 +43,15 @@ namespace AddADescription
                 outputPath = args[2];
                 species = args[1];
                 skipMissing = args[3].ToLower() == "true" ? true : false;
+
+                bool baseExists = Directory.Exists(basePath);
+                bool outputExists = Directory.Exists(outputPath);
+                if (!baseExists || !outputExists)
+                {
+                    string err = baseExists ? outputPath : outputExists ? basePath : basePath + " and " + outputPath;
+                    Console.WriteLine("Invalid path(s): {0}. Starting regular setup.", err);
+                    Setup();
+                }
             }
 
             Console.WriteLine("Busy. Depending on when the files in this folder were last indexed, this may go really fast or really slow.");
