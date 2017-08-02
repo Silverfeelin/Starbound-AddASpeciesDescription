@@ -1,6 +1,8 @@
 # Add A Species Description
 A quick repo for a .NET tool that creates species description patches for objects and tiles.
 
+A better tool with a GUI: http://community.playstarbound.com/threads/hey-race-modders-a-little-something-to-use-for-racial-descriptions.136135/
+
 Instead of using the generic object and tile descriptions, a new species description will be added to all objects and tiles for the species of your choice. By default, the human description is copied as a base value. For objects that lack this value, you can choose whether to use the default description to still create patches or to skip these files.
 
 This tool is targeted at adding descriptions for modded species; it will not replace existing descriptions.
